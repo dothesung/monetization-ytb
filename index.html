@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiểm tra trạng thái kiếm tiền kênh YouTube</title>
+    <!-- Tải Tailwind CSS để làm đẹp giao diện -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tải thư viện icon Heroicons -->
+    <script src="https://unpkg.com/heroicons@2.1.3/24/outline/index.js"></script>
+    <style>
+        /* Thêm font chữ Inter cho đẹp hơn */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Màu nền xám nhạt */
+        }
+        /* Style cho placeholder của input */
+        ::placeholder {
+            color: #9ca3af;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-lg p-6 md:p-8">
+        
+        <!-- Tiêu đề -->
+        <div class="text-center mb-6">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-800">Kiểm tra Kênh YouTube</h1>
+            <p class="text-gray-500 mt-1">Nhập link kênh YouTube để xem trạng thái bật kiếm tiền.</p>
+        </div>
+
+        <!-- Form nhập liệu -->
+        <form id="yt-form" class="flex flex-col sm:flex-row gap-3 mb-6">
+            <input 
+                type="text" 
+                id="yt-url" 
+                placeholder="Dán link kênh YouTube vào đây (ví dụ: https://www.youtube.com/@MishieVo)" 
+                class="flex-grow w-full px-4 py-3 text-gray-700 bg-gray-100 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                required
+            >
+            <button 
+                type="submit"
+                id="submit-btn"
+                class="w-full sm:w-auto bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+            >
+                <!-- Icon và Text của nút -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+                <span>Kiểm tra</span>
+            </button>
+        </form>
+
+        <!-- Vùng hiển thị kết quả -->
+        <div id="loading" class="text-center py-4 hidden">
+             <div class="flex justify-center items-center gap-2 text-gray-500">
+                <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Đang tải dữ liệu...</span>
+            </div>
+        </div>
+        <div id="error" class="text-center p-4 bg-red-100 text-red-700 rounded-lg hidden"></div>
+        <div id="result" class="hidden"></div>
+
+    </div>
+
+    <script>
+        // Lấy các phần tử DOM
+        const form = document.getElementById('yt-form');
+        const urlInput = document.getElementById('yt-url');
+        const submitBtn = document.getElementById('submit-btn');
+        const resultDiv = document.getElementById('result');
+        const errorDiv = document.getElementById('error');
+        const loadingDiv = document.getElementById('loading');
+
+        // Thêm sự kiện khi form được gửi
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Ngăn trang tải lại
+
+            const youtubeUrl = urlInput.value.trim();
+            if (!youtubeUrl) {
+                showError('Vui lòng nhập link kênh YouTube.');
+                return;
+            }
+
+            // Hiển thị loading và ẩn kết quả/lỗi cũ
+            loadingDiv.classList.remove('hidden');
+            resultDiv.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+            submitBtn.disabled = true;
+
+            try {
+                // --- THAY ĐỔI QUAN TRỌNG ---
+                // Đổi sang một proxy CORS khác để tăng độ ổn định
+                const targetApiUrl = `https://api.nekoo.qzz.io/info/yt-monetization?url=${encodeURIComponent(youtubeUrl)}`;
+                const proxyUrl = `https://thingproxy.freeboard.io/fetch/${targetApiUrl}`;
+
+                // Gọi API thông qua proxy mới
+                const response = await fetch(proxyUrl);
+
+                // Xử lý nếu API không trả về kết quả thành công
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Lỗi từ máy chủ proxy: ${response.status}. Chi tiết: ${errorText}`);
+                }
+
+                // Proxy này trả về JSON trực tiếp, không cần phải xử lý thêm
+                const data = await response.json();
+
+                // Kiểm tra cấu trúc dữ liệu trả về từ API gốc
+                if (data.status && data.result) {
+                    displayResult(data.result);
+                } else {
+                    // Nếu API trả về status: false hoặc không có result
+                    throw new Error(data.message || 'Không thể lấy thông tin từ link này. Vui lòng kiểm tra lại link kênh.');
+                }
+
+            } catch (err) {
+                // Hiển thị lỗi nếu có vấn đề xảy ra
+                let errorMessage = err.message;
+                // Xử lý lỗi JSON parse nếu proxy trả về HTML lỗi thay vì JSON
+                if (err instanceof SyntaxError) {
+                    errorMessage = "Lỗi: Máy chủ proxy trả về phản hồi không hợp lệ. Vui lòng thử lại sau.";
+                }
+                showError(errorMessage);
+            } finally {
+                // Luôn ẩn loading và bật lại nút sau khi hoàn tất
+                loadingDiv.classList.add('hidden');
+                submitBtn.disabled = false;
+            }
+        });
+
+        // Hàm hiển thị lỗi
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            resultDiv.classList.add('hidden');
+        }
+
+        // Hàm hiển thị kết quả
+        function displayResult(data) {
+            // Hàm định dạng số cho dễ đọc
+            const formatNumber = (num) => num ? num.toLocaleString('vi-VN') : '0';
+
+            // Hàm tạo icon check/x
+            const getStatusIcon = (status) => {
+                return status 
+                    ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 text-green-500"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clip-rule="evenodd" /></svg>`
+                    : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 text-red-500"><path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" /></svg>`;
+            };
+            
+            // Hàm tạo dòng thông tin
+            const createInfoRow = (label, value, icon = '') => `
+                <div class="flex justify-between items-center py-3">
+                    <span class="text-gray-500">${label}</span>
+                    <span class="font-semibold text-gray-800 flex items-center gap-2">${icon}${value}</span>
+                </div>
+            `;
+            
+            // Tạo HTML cho kết quả
+            resultDiv.innerHTML = `
+                <div class="border border-gray-200 rounded-lg overflow-hidden">
+                    <!-- Header của card kết quả -->
+                    <div class="p-4 bg-gray-50 flex flex-col sm:flex-row items-center gap-4">
+                        <img src="${data.thumbnailUrl}" alt="Ảnh đại diện" class="w-20 h-20 rounded-full object-cover border-2 border-white shadow-md">
+                        <div class="text-center sm:text-left">
+                            <h2 class="text-xl font-bold text-gray-900">${data.title}</h2>
+                            <a href="https://www.youtube.com/channel/${data.id}" target="_blank" class="text-sm text-blue-600 hover:underline">
+                                Xem trên YouTube
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Thân card với các thông số -->
+                    <div class="p-4 divide-y divide-gray-200">
+                        ${createInfoRow(
+                            'Trạng thái kiếm tiền', 
+                            data.isMonetized ? '<span class="text-green-600">Đã bật</span>' : '<span class="text-red-600">Chưa bật / Không xác định</span>',
+                            getStatusIcon(data.isMonetized)
+                        )}
+                        ${createInfoRow(
+                            'Yêu cầu Lượt đăng ký', 
+                            data.meetsSubscriberRequirement ? 'Đạt yêu cầu' : 'Chưa đạt',
+                            getStatusIcon(data.meetsSubscriberRequirement)
+                        )}
+                        ${createInfoRow('Lượt đăng ký', formatNumber(data.subscriberCount))}
+                        ${createInfoRow('Tổng số video', formatNumber(data.videoCount))}
+                        ${createInfoRow('Tổng lượt xem', formatNumber(data.viewCount))}
+                        ${createInfoRow('Ước tính doanh thu', '<span class="text-gray-500">Không có dữ liệu</span>')}
+                    </div>
+                </div>
+            `;
+
+            // Hiển thị kết quả
+            resultDiv.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
